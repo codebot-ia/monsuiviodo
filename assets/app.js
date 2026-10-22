@@ -68,6 +68,9 @@ function notifier(message) {
   bulle.className = "notification";
   bulle.textContent = message;
   elements.notifications.appendChild(bulle);
+  while (elements.notifications.children.length > 2) {
+    elements.notifications.firstElementChild.remove();
+  }
   window.setTimeout(() => bulle.remove(), 3400);
 }
 
