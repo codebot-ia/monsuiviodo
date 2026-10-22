@@ -1,5 +1,5 @@
 /* MonSuiviOrdo — service worker : application disponible hors ligne. */
-const VERSION = "monsuiviodo-v1";
+const VERSION = "monsuiviodo-v2";
 const RACINE = new URL("./", self.location).pathname;
 
 const FICHIERS_APPLICATION = [
@@ -71,17 +71,19 @@ self.addEventListener("fetch", (evenement) => {
     return;
   }
 
-  // Ressources locales : cache d'abord, réseau en complément.
+  // Ressources locales : cache immédiat, mise à jour en arrière-plan
+  // (l'utilisateur voit la version en cache, le réseau rafraîchit pour la visite suivante).
   evenement.respondWith(
-    caches.match(requete).then(
-      (enCache) =>
-        enCache ||
-        fetch(requete).then((reponse) => {
+    caches.match(requete).then((enCache) => {
+      const depuisReseau = fetch(requete)
+        .then((reponse) => {
           const copie = reponse.clone();
           caches.open(VERSION).then((cache) => cache.put(requete, copie));
           return reponse;
         })
-    )
+        .catch(() => enCache);
+      return enCache || depuisReseau;
+    })
   );
 });
 

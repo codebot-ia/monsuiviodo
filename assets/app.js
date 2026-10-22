@@ -38,6 +38,8 @@ const elements = {
   dialogueMedicament: document.getElementById("dialogue-medicament"),
   formulaireMedicament: document.getElementById("formulaire-medicament"),
   titreDialogueMedicament: document.getElementById("titre-dialogue-medicament"),
+  dialogueConfirmation: document.getElementById("dialogue-confirmation"),
+  messageConfirmation: document.getElementById("message-confirmation"),
   boutonScanner: document.getElementById("bouton-scanner"),
   champPhoto: document.getElementById("champ-photo"),
   etatScan: document.getElementById("etat-scan"),
@@ -50,6 +52,8 @@ let maladieCible = null; // id de la maladie en cours d'édition
 let medicamentCible = null; // id du médicament en cours d'édition (null = ajout)
 let invitationInstallation = null;
 let chargementTesseract = null;
+let suppressionArmee = null; // clé du bouton « Supprimer » déjà cliqué une fois
+let minuteurSuppression = null;
 
 /* ------------------------------------------------------------------ utilitaires */
 
@@ -64,6 +68,50 @@ function notifier(message) {
   bulle.textContent = message;
   elements.notifications.appendChild(bulle);
   window.setTimeout(() => bulle.remove(), 3400);
+}
+
+/**
+ * Suppression en deux temps : le premier clic arme le bouton (« Certain ? »),
+ * le second supprime. Sans second clic sous 4 s, le bouton reprend son libellé.
+ */
+function armerSuppression(bouton, cle) {
+  desarmerSuppression();
+  bouton.dataset.libelleInitiale = bouton.textContent.trim();
+  bouton.textContent = "Certain ?";
+  bouton.classList.add("bouton--arme");
+  suppressionArmee = cle;
+  minuteurSuppression = window.setTimeout(() => {
+    bouton.textContent = bouton.dataset.libelleInitiale || "Supprimer";
+    bouton.classList.remove("bouton--arme");
+    suppressionArmee = null;
+    minuteurSuppression = null;
+  }, 4000);
+}
+
+function desarmerSuppression() {
+  if (minuteurSuppression) {
+    window.clearTimeout(minuteurSuppression);
+    minuteurSuppression = null;
+  }
+  document.querySelectorAll(".bouton--arme").forEach((bouton) => {
+    bouton.textContent = bouton.dataset.libelleInitiale || "Supprimer";
+    bouton.classList.remove("bouton--arme");
+  });
+  suppressionArmee = null;
+}
+
+/** Boîte de confirmation intégrée à l'application (remplace window.confirm). */
+function demanderConfirmation(message) {
+  return new Promise((resoudre) => {
+    elements.messageConfirmation.textContent = message;
+    const surFermeture = () => {
+      elements.dialogueConfirmation.removeEventListener("close", surFermeture);
+      resoudre(elements.dialogueConfirmation.returnValue === "confirmer");
+    };
+    elements.dialogueConfirmation.addEventListener("close", surFermeture);
+    elements.dialogueConfirmation.returnValue = "annuler";
+    elements.dialogueConfirmation.showModal();
+  });
 }
 
 /* ------------------------------------------------------------------ stockage */
@@ -96,6 +144,11 @@ function trouverMaladie(id) {
 
 function rendre() {
   const aujourdHui = aujourdHuiISO();
+  suppressionArmee = null;
+  if (minuteurSuppression) {
+    window.clearTimeout(minuteurSuppression);
+    minuteurSuppression = null;
+  }
   elements.liste.replaceChildren();
   for (const maladie of etat.maladies) {
     elements.liste.appendChild(construireCarte(maladie, aujourdHui));
@@ -254,7 +307,7 @@ async function importer(fichier) {
       notifier("Cette sauvegarde ne contient aucune maladie.");
       return;
     }
-    const accord = window.confirm(
+    const accord = await demanderConfirmation(
       `Remplacer les ${etat.maladies.length} maladie(s) actuelles par les ${donnees.maladies.length} de la sauvegarde ?`
     );
     if (!accord) return;
@@ -420,7 +473,10 @@ elements.liste.addEventListener("click", (evenement) => {
     case "supprimer-maladie": {
       const maladie = trouverMaladie(idMaladie);
       if (!maladie) break;
-      if (!window.confirm(`Supprimer la maladie « ${maladie.nom} » et ses ${maladie.medicaments.length} médicament(s) ?`)) break;
+      if (suppressionArmee !== `maladie:${idMaladie}`) {
+        armerSuppression(bouton, `maladie:${idMaladie}`);
+        break;
+      }
       etat.maladies = etat.maladies.filter((m) => m.id !== idMaladie);
       sauvegarder();
       rendre();
@@ -459,7 +515,10 @@ elements.liste.addEventListener("click", (evenement) => {
       if (!maladie) break;
       const medicament = maladie.medicaments.find((m) => m.id === idMedicament);
       if (!medicament) break;
-      if (!window.confirm(`Supprimer « ${medicament.nom} » ?`)) break;
+      if (suppressionArmee !== `medicament:${idMedicament}`) {
+        armerSuppression(bouton, `medicament:${idMedicament}`);
+        break;
+      }
       maladie.medicaments = maladie.medicaments.filter((m) => m.id !== idMedicament);
       sauvegarder();
       rendre();

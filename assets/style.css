@@ -263,6 +263,31 @@ ul { padding: 0; list-style: none; }
 .bouton--danger { color: var(--danger); background: transparent; border-color: var(--bord); }
 .bouton--danger:hover { background: var(--danger-doux); border-color: var(--danger); }
 
+/* Bouton de suppression armé : le second clic confirme. */
+.bouton--arme,
+.bouton--arme:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  animation: armement .18s ease-out;
+}
+@media (prefers-color-scheme: dark) {
+  .bouton--arme,
+  .bouton--arme:hover { color: #2b0b0b; }
+}
+@keyframes armement {
+  from { transform: scale(.94); }
+  to { transform: scale(1); }
+}
+
+.bouton--danger-plein {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.dialogue__message { font-size: .92rem; color: var(--texte-doux); }
+
 .bouton--lien {
   background: none;
   border: none;

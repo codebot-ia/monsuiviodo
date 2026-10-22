@@ -125,6 +125,17 @@
       </form>
     </dialog>
 
+    <dialog id="dialogue-confirmation" class="dialogue" aria-labelledby="titre-confirmation">
+      <form method="dialog" class="formulaire">
+        <h2 id="titre-confirmation" class="dialogue__titre">Confirmer</h2>
+        <p id="message-confirmation" class="dialogue__message"></p>
+        <div class="dialogue__actions">
+          <button type="submit" value="annuler" class="bouton bouton--discret">Annuler</button>
+          <button type="submit" value="confirmer" class="bouton bouton--danger-plein">Remplacer</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="notifications" class="notifications" role="status" aria-live="polite"></div>
 
     <script type="module" src="./assets/app.js"></script>
