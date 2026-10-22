@@ -198,6 +198,7 @@ ul { padding: 0; list-style: none; }
   transition: transform .18s ease;
 }
 .carte--ouverte .carte__chevron { transform: rotate(-135deg); }
+.carte--ouverte .carte__compte { display: none; }
 
 .carte__corps { margin-top: .9rem; }
 .carte--repliee .carte__corps { display: none; }
@@ -671,7 +672,8 @@ ul { padding: 0; list-style: none; }
   .carte__titre { font-size: 1.02rem; }
   .carte__sous-titre { font-size: .77rem; }
   .carte__bascule { gap: .45rem; min-height: 2.6rem; }
-  .carte__actions { gap: .3rem; }
+  .carte__actions { gap: .25rem; }
+  .carte__actions .bouton--petit { padding: .28rem .4rem; font-size: .69rem; }
 
   .medicament { padding: .65rem .7rem; border-radius: 10px; }
   .medicament__ligne { gap: .35rem; }
