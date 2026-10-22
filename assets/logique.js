@@ -148,7 +148,7 @@ export function normaliserDonnees(brut) {
 const MOTIF_FORME = /(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|bouff[ée]e|application|injection|suppositoire|dose|lavement)/i;
 const MOTIF_RYTHME = /(matin|midi|soir|nuit|coucher|repas|par jour|\/\s*j|toutes les|\d+\s*fois|fois par)/i;
 const MOTIF_EMBALLAGE = /\b(CPR|COMPR|GELULES?|GEL|G[EÉ]L|SUSP|SOLU?|SP|S\/S|TUBE|FL|AMP|BUV|EFF|LP|ZTV|NAS|PULV|SIROP|CR[EÈ]ME|POM|SUPPO|SACHET|COLLYRE|INJ|STICK|PDRE|DRAG|OVULE)\b/gi;
-const MOTIF_BRUIT = /(ordonnance|pharmacie|pharmacien|docteur|m[ée]decin|membre|association|assurance|r[ée]glement|honoraires|ch[eè]que|accepte|conventionn|garde|ameli|https?|www\.|prescription|produits?|patient|titulaire|autorit[ée]|donn[ée]es|transmises|[ée]lectroniquement|droits|signature|posologie|notice|g[ée]n[ée]rique|substitu|rpps|\bam\b|t[ée]l\b|\bdr\b|adresse|box|bo[îi]te|renouvel|date|apicrypt|e-mail|mail)/i;
+const MOTIF_BRUIT = /(ordonnance|pharmacie|pharmacien|docteur|m[ée]decin|membre|association|assurance|r[ée]glement|honoraires|ch[eè]que|accepte|conventionn|garde|ameli|https?|www\.|prescription|produits?|patient|titulaire|autorit[ée]|donn[ée]es|transmises|[ée]lectroniquement|droits|signature|cachet|merci|confiance|cordialement|conserver|posologie|notice|g[ée]n[ée]rique|substitu|rpps|\bam\b|t[ée]l\b|\bdr\b|adresse|box|bo[îi]te|renouvel|date|apicrypt|e-mail|mail|code[- ]?barre|\bean\b|\blot\b)/i;
 const MOTIF_DEBUT_POSOLOGIE = /\s+\d+\s*(?:à\s*\d+\s*)?(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|dose|application|bouff[ée]e|injection)/i;
 
 /** Un dosage pharmaceutique est-il présent (tolérance OCR sur 0/O et 1/I/l) ? */
@@ -178,6 +178,12 @@ function estNomDeMedicament(ligne, suivante) {
   if (t.length < 3 || t.length > 90) return false;
   if (MOTIF_BRUIT.test(t)) return false;
   if (estLignePosologie(t)) return false;
+  // Un nom commence par un mot de lettres : écarte les codes-barres, les
+  // numéros de lot, les dates et les lignes de chiffres.
+  if (!/^[A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç]{3,}/.test(t)) return false;
+  const lettres = (t.match(/[A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç]/g) || []).length;
+  const chiffres = (t.match(/\d/g) || []).length;
+  if (lettres < 4 || lettres <= chiffres) return false;
   if (aUnDosage(t) || compterEmballages(t) >= 2) return true;
   // Nom seul en majuscules, le dosage figurant sur la ligne suivante.
   const enMajuscules = /^[A-ZÉÈÀÂÎÔÛÇ][A-ZÉÈÀÂÎÔÛÇ'’.\-\s]{2,45}$/.test(t);
@@ -218,14 +224,26 @@ export function extraireDuree(texte) {
   return null;
 }
 
-function nettoyerPosologie(ligne) {
-  return String(ligne)
+function nettoyerPosologie(texte) {
+  return String(texte)
     .replace(/^[\s\-•*·]+/, "")
+    .replace(/\s*(?:pendant|durant|pour)\s+(?:\d{1,3}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt)\s*(?:jours?|semaines?|mois)\b/gi, "")
     .replace(/\s{2,}/g, " ")
-    .replace(/\s*(?:pendant|durant|pour)\s+(?:\d{1,3}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt)\s*(?:jours?|semaines?|mois)\b.*$/i, "")
+    .replace(/\s+([.;,])/g, "$1")
     .replace(/[.;,\s]+$/, "")
     .trim()
-    .slice(0, 120);
+    .slice(0, 220);
+}
+
+/** Une ligne de détail est-elle du bruit (code-barres, numéros, total) ? */
+function estLigneParasite(ligne) {
+  const t = String(ligne).trim();
+  if (!t) return true;
+  if (MOTIF_BRUIT.test(t)) return true;
+  if (/^[\d\s.,\-\/|:]+$/.test(t)) return true; // uniquement des chiffres
+  const chiffres = (t.match(/\d/g) || []).length;
+  const lettres = (t.match(/[A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç]/g) || []).length;
+  return chiffres > 0 && lettres < 4 && chiffres >= lettres;
 }
 
 /**
@@ -256,7 +274,7 @@ export function extraireOrdonnance(texte) {
       if (bloc) blocs.push(bloc);
       const { nom, reste } = separerNomEtPosologie(ligne);
       bloc = { nom, details: reste ? [reste] : [] };
-    } else if (bloc && bloc.details.length < 4 && !MOTIF_BRUIT.test(ligne)) {
+    } else if (bloc && bloc.details.length < 6 && !estLigneParasite(ligne)) {
       bloc.details.push(ligne);
     }
   });
@@ -264,11 +282,14 @@ export function extraireOrdonnance(texte) {
 
   for (const element of blocs) {
     const texteBloc = [element.nom, ...element.details].join(" ");
-    const candidats = element.details.filter((ligne) => MOTIF_FORME.test(ligne) || /\d/.test(ligne));
-    const posologie = candidats.find((ligne) => MOTIF_FORME.test(ligne) && MOTIF_RYTHME.test(ligne)) || candidats[0] || "";
+    // Toute la description du médicament, y compris les lignes suivantes
+    // (précautions, maximum par jour…), pas seulement la première.
+    const description = element.details
+      .filter((ligne, position) => element.details.indexOf(ligne) === position)
+      .join(" ");
     resultat.medicaments.push({
       nom: element.nom.replace(/\s{2,}/g, " ").slice(0, 80),
-      posologie: posologie ? nettoyerPosologie(posologie) : "",
+      posologie: description ? nettoyerPosologie(description) : "",
       dureeJours: extraireDuree(texteBloc)
     });
   }
