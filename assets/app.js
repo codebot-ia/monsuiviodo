@@ -19,7 +19,7 @@ import {
   resumer
 } from "./logique.js";
 
-const CLE_STOCKAGE = "monsuivioro.v1";
+const CLE_STOCKAGE = "monsuiviodo.v1";
 const URL_TESSERACT = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
 
 const elements = {
@@ -238,7 +238,7 @@ function exporter() {
   const url = URL.createObjectURL(blob);
   const lien = document.createElement("a");
   lien.href = url;
-  lien.download = `monsuivioro-${aujourdHuiISO()}.json`;
+  lien.download = `monsuiviodo-${aujourdHuiISO()}.json`;
   document.body.appendChild(lien);
   lien.click();
   lien.remove();
