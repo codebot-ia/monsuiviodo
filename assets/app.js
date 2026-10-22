@@ -20,7 +20,8 @@ import {
 } from "./logique.js";
 
 const CLE_STOCKAGE = "monsuiviordo.v1";
-const URL_TESSERACT = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+// Tout est servi par le site : aucune dépendance externe pour l'OCR.
+const RACINE_OCR = new URL("./assets/ocr/", window.location.href).href;
 
 const elements = {
   liste: document.getElementById("liste"),
@@ -357,10 +358,9 @@ function chargerTesseract() {
   if (!chargementTesseract) {
     chargementTesseract = new Promise((resoudre, rejeter) => {
       const script = document.createElement("script");
-      script.src = URL_TESSERACT;
-      script.crossOrigin = "anonymous";
+      script.src = `${RACINE_OCR}tesseract.min.js`;
       script.onload = () => (window.Tesseract ? resoudre(window.Tesseract) : rejeter(new Error("moteur absent")));
-      script.onerror = () => rejeter(new Error("chargement réseau impossible"));
+      script.onerror = () => rejeter(new Error("moteur de reconnaissance introuvable"));
       document.head.appendChild(script);
     });
   }
@@ -404,6 +404,11 @@ async function lireTexte(fichier) {
   const Tesseract = await chargerTesseract();
   elements.etatAnalyse.textContent = "Reconnaissance en cours…";
   const worker = await Tesseract.createWorker("fra", 1, {
+    workerPath: `${RACINE_OCR}worker.min.js`,
+    corePath: RACINE_OCR,
+    langPath: `${RACINE_OCR}lang`,
+    gzip: true,
+    workerBlobURL: false,
     logger: (m) => {
       if (m.status === "recognizing text") {
         elements.etatAnalyse.textContent = `Reconnaissance en cours… ${Math.round((m.progress || 0) * 100)} %`;
@@ -437,7 +442,7 @@ async function scannerPourMaladie(idMaladie, fichier) {
     remplirAnalyse(extraireOrdonnance(texte), texte);
   } catch (erreur) {
     console.warn("Analyse impossible", erreur);
-    elements.etatAnalyse.textContent = "Reconnaissance indisponible (le moteur se télécharge au premier usage : une connexion est nécessaire).";
+    elements.etatAnalyse.textContent = "Reconnaissance indisponible sur ce navigateur. Saisissez les médicaments à la main.";
   }
 }
 

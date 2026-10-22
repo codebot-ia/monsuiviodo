@@ -1,5 +1,5 @@
 /* MonSuiviOrdo — service worker : application disponible hors ligne. */
-const VERSION = "monsuiviordo-v1.7.2";
+const VERSION = "monsuiviordo-v1.8.0";
 const RACINE = new URL("./", self.location).pathname;
 
 const FICHIERS_APPLICATION = [
@@ -10,7 +10,9 @@ const FICHIERS_APPLICATION = [
   "./assets/app.js",
   "./assets/logique.js",
   "./assets/icone-192.png",
-  "./assets/icone-512.png"
+  "./assets/icone-512.png",
+  "./assets/ocr/tesseract.min.js",
+  "./assets/ocr/worker.min.js"
 ];
 
 self.addEventListener("install", (evenement) => {
