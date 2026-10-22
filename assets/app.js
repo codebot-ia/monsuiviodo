@@ -15,7 +15,7 @@ import {
   creerId,
   donneesVides,
   normaliserDonnees,
-  extraireIndices,
+  extraireOrdonnance,
   resumer
 } from "./logique.js";
 
@@ -41,11 +41,14 @@ const elements = {
   impressionDate: document.getElementById("impression-date"),
   dialogueConfirmation: document.getElementById("dialogue-confirmation"),
   messageConfirmation: document.getElementById("message-confirmation"),
-  boutonScanner: document.getElementById("bouton-scanner"),
-  champPhoto: document.getElementById("champ-photo"),
-  etatScan: document.getElementById("etat-scan"),
-  detailsTexte: document.getElementById("details-texte"),
-  texteReconnu: document.getElementById("texte-reconnu")
+  champPhotoMaladie: document.getElementById("champ-photo-maladie"),
+  dialogueAnalyse: document.getElementById("dialogue-analyse"),
+  formulaireAnalyse: document.getElementById("formulaire-analyse"),
+  listeAnalyse: document.getElementById("liste-analyse"),
+  etatAnalyse: document.getElementById("etat-analyse"),
+  detailsAnalyse: document.getElementById("details-analyse"),
+  texteAnalyse: document.getElementById("texte-analyse"),
+  boutonAjouterAnalyse: document.getElementById("bouton-ajouter-analyse")
 };
 
 let etat = charger();
@@ -164,13 +167,16 @@ function rendre() {
 function texteSousTitre(maladie, aujourdHui) {
   const fin = finMaladie(maladie);
   const medicaments = maladie.medicaments;
-  if (!medicaments.length) return "Aucun médicament : ajoutez-en un pour démarrer le suivi.";
-  if (!fin) return `${medicaments.length} médicament${medicaments.length > 1 ? "s" : ""} · en attente de démarrage`;
+  if (!medicaments.length) {
+    return `Aucun médicament<span class="ecran-seul"> : ajoutez-en un pour démarrer le suivi</span>`;
+  }
+  if (!fin) {
+    const nombre = medicaments.length;
+    return `${nombre} médicament${nombre > 1 ? "s" : ""}<span class="ecran-seul"> · en attente de démarrage</span>`;
+  }
   const restants = joursRestants(fin, aujourdHui);
-  const echeance = restants > 0
-    ? `<strong>Traitement jusqu'au ${formaterDate(fin)}</strong> · ${echapper(libelleJours(restants))}`
-    : `Traitement terminé le ${formaterDate(fin)}`;
-  return echeance;
+  const detail = restants > 0 ? libelleJours(restants) : "terminé";
+  return `<strong>Traitement jusqu'au ${formaterDate(fin)}</strong><span class="ecran-seul"> · ${echapper(detail)}</span>`;
 }
 
 function construireCarte(maladie, aujourdHui) {
@@ -186,6 +192,7 @@ function construireCarte(maladie, aujourdHui) {
       </div>
       <div class="carte__actions">
         <button type="button" class="bouton bouton--petit" data-action="ajouter-medicament">+ Médicament</button>
+        <button type="button" class="bouton bouton--petit" data-action="scanner-ordonnance">Scanner</button>
         <button type="button" class="bouton bouton--petit" data-action="imprimer-carte">Imprimer</button>
         <button type="button" class="bouton bouton--petit bouton--danger" data-action="supprimer-maladie">Supprimer</button>
       </div>
@@ -203,9 +210,10 @@ function construireLigneMedicament(medicament, aujourdHui) {
   const restants = joursRestants(fin, aujourdHui);
   const libelles = { attente: "En attente", "en-cours": "En cours", termine: "Terminé" };
   const detail = statut === "en-cours" ? ` · ${libelleJours(restants)}` : "";
+  const duree = `${medicament.dureeJours} jour${medicament.dureeJours > 1 ? "s" : ""}`;
   const dates = medicament.debut && fin
-    ? `Du ${formaterDate(medicament.debut)} au ${formaterDate(fin)} · ${medicament.dureeJours} jour${medicament.dureeJours > 1 ? "s" : ""}`
-    : `Durée prévue : ${medicament.dureeJours} jour${medicament.dureeJours > 1 ? "s" : ""} · pas encore démarré`;
+    ? `Du ${formaterDate(medicament.debut)} au ${formaterDate(fin)} · ${duree}`
+    : `<span class="ecran-seul">Durée prévue : </span>${duree}<span class="ecran-seul"> · pas encore démarré</span>`;
   const boutonDebut = medicament.debut
     ? `<button type="button" class="bouton bouton--petit" data-action="annuler-debut">Annuler le début</button>`
     : `<button type="button" class="bouton bouton--petit bouton--principal" data-action="demarrer">Début</button>`;
@@ -217,7 +225,7 @@ function construireLigneMedicament(medicament, aujourdHui) {
         <span class="pastille pastille--${statut}">${libelles[statut]}${detail}</span>
       </div>
       ${medicament.posologie ? `<p class="medicament__posologie">${echapper(medicament.posologie)}</p>` : ""}
-      <p class="medicament__dates">${echapper(dates)}</p>
+      <p class="medicament__dates">${dates}</p>
       <div class="medicament__actions">
         ${boutonDebut}
         <button type="button" class="bouton bouton--petit" data-action="modifier-medicament">Modifier</button>
@@ -348,49 +356,102 @@ function chargerTesseract() {
   return chargementTesseract;
 }
 
-async function analyserPhoto(fichier) {
-  const compteRendu = (message) => { elements.etatScan.textContent = message; };
-  try {
-    compteRendu("Chargement du moteur de reconnaissance (une seule fois)…");
-    const Tesseract = await chargerTesseract();
-    compteRendu("Préparation de la reconnaissance…");
-    const worker = await Tesseract.createWorker("fra", 1, {
-      logger: (m) => {
-        if (m.status === "recognizing text") {
-          compteRendu(`Reconnaissance en cours… ${Math.round((m.progress || 0) * 100)} %`);
-        }
+/** Lance l'OCR locale sur une photo et renvoie le texte reconnu. */
+async function lireTexte(fichier) {
+  elements.etatAnalyse.textContent = "Chargement du moteur de reconnaissance (une seule fois)…";
+  const Tesseract = await chargerTesseract();
+  elements.etatAnalyse.textContent = "Préparation de la reconnaissance…";
+  const worker = await Tesseract.createWorker("fra", 1, {
+    logger: (m) => {
+      if (m.status === "recognizing text") {
+        elements.etatAnalyse.textContent = `Reconnaissance en cours… ${Math.round((m.progress || 0) * 100)} %`;
       }
-    });
-    const { data } = await worker.recognize(fichier);
-    await worker.terminate();
+    }
+  });
+  const { data } = await worker.recognize(fichier);
+  await worker.terminate();
+  return (data && data.text ? data.text : "").trim();
+}
 
-    const texte = (data && data.text ? data.text : "").trim();
-    elements.texteReconnu.textContent = texte || "(aucun texte détecté)";
-    elements.detailsTexte.hidden = false;
-
+/** Ouvre l'aperçu d'analyse, puis remplit les médicaments détectés pour relecture. */
+async function scannerPourMaladie(idMaladie, fichier) {
+  const maladie = trouverMaladie(idMaladie);
+  if (!maladie) return;
+  maladieCible = idMaladie;
+  ouvrirAnalyse("Analyse de la photo en cours…");
+  try {
+    const texte = await lireTexte(fichier);
     if (!texte) {
-      compteRendu("Aucun texte détecté : reprenez la photo avec plus de lumière.");
+      elements.etatAnalyse.textContent = "Aucun texte détecté : reprenez la photo avec plus de lumière, ou saisissez à la main.";
+      ajouterLigneAnalyse({ nom: "", posologie: "", dureeJours: 7 });
       return;
     }
-
-    const indices = extraireIndices(texte);
-    const formulaire = elements.formulaireMedicament.elements;
-    const appliques = [];
-    if (indices.nom && !formulaire.nom.value.trim()) { formulaire.nom.value = indices.nom; appliques.push("médicament"); }
-    if (indices.posologie && !formulaire.posologie.value.trim()) { formulaire.posologie.value = indices.posologie; appliques.push("posologie"); }
-    if (indices.dureeJours && (!formulaire.dureeJours.value || formulaire.dureeJours.value === "7")) {
-      formulaire.dureeJours.value = indices.dureeJours;
-      appliques.push("durée");
-    }
-
-    if (appliques.length) {
-      compteRendu(`Texte reconnu. Champs pré-remplis : ${appliques.join(", ")}. Vérifiez avant d'enregistrer.`);
-    } else {
-      compteRendu("Texte reconnu, mais aucun champ n'a pu être déduit : complétez à la main.");
-    }
+    remplirAnalyse(extraireOrdonnance(texte), texte);
   } catch (erreur) {
     console.warn("Analyse impossible", erreur);
-    compteRendu("Reconnaissance indisponible (le moteur se télécharge au premier usage, une connexion est nécessaire).");
+    elements.etatAnalyse.textContent = "Reconnaissance indisponible (le moteur se télécharge au premier usage : une connexion est nécessaire).";
+  }
+}
+
+function ouvrirAnalyse(messageAttente) {
+  elements.listeAnalyse.replaceChildren();
+  elements.detailsAnalyse.hidden = true;
+  elements.detailsAnalyse.open = false;
+  elements.texteAnalyse.textContent = "";
+  elements.etatAnalyse.textContent = messageAttente || "";
+  majBoutonAnalyse();
+  if (!elements.dialogueAnalyse.open) elements.dialogueAnalyse.showModal();
+}
+
+/** Ajoute une ligne éditable (un médicament détecté) dans l'aperçu. */
+function ajouterLigneAnalyse(valeurs) {
+  const ligne = document.createElement("div");
+  ligne.className = "ligne-analyse";
+  ligne.innerHTML = `
+    <label class="ligne-analyse__choix">
+      <input type="checkbox" checked aria-label="Ajouter ce médicament">
+    </label>
+    <div class="ligne-analyse__champs">
+      <input class="champ__saisie" data-champ="nom" type="text" maxlength="80"
+             placeholder="Médicament" aria-label="Médicament" value="${echapper(valeurs.nom || "")}">
+      <input class="champ__saisie" data-champ="posologie" type="text" maxlength="120"
+             placeholder="Posologie" aria-label="Posologie" value="${echapper(valeurs.posologie || "")}">
+      <div class="ligne-analyse__pied">
+        <label class="ligne-analyse__duree">
+          <span>Durée (jours)</span>
+          <input class="champ__saisie" data-champ="dureeJours" type="number" min="1" max="365"
+                 value="${Number(valeurs.dureeJours) > 0 ? Number(valeurs.dureeJours) : 7}" aria-label="Durée en jours">
+        </label>
+        <button type="button" class="bouton bouton--petit bouton--danger" data-retirer>Retirer</button>
+      </div>
+    </div>`;
+  elements.listeAnalyse.appendChild(ligne);
+  majBoutonAnalyse();
+  return ligne;
+}
+
+function majBoutonAnalyse() {
+  const total = elements.listeAnalyse.querySelectorAll('.ligne-analyse input[type="checkbox"]:checked').length;
+  elements.boutonAjouterAnalyse.disabled = total === 0;
+  elements.boutonAjouterAnalyse.textContent = total > 1 ? `Ajouter ${total} médicaments` : "Ajouter le médicament";
+}
+
+function remplirAnalyse(ordonnance, texte) {
+  const medicaments = (ordonnance && ordonnance.medicaments) || [];
+  if (!medicaments.length) {
+    elements.etatAnalyse.textContent = "Aucun médicament reconnu : complétez la ligne ci-dessous à la main.";
+    ajouterLigneAnalyse({ nom: "", posologie: "", dureeJours: 7 });
+  } else {
+    const nombre = medicaments.length;
+    elements.etatAnalyse.textContent = `${nombre} médicament${nombre > 1 ? "s" : ""} détecté${nombre > 1 ? "s" : ""} — relisez avant d'ajouter.`;
+    medicaments.forEach((medicament) => ajouterLigneAnalyse(medicament));
+  }
+  if (texte) {
+    elements.texteAnalyse.textContent = texte;
+    elements.detailsAnalyse.hidden = false;
+  }
+  if (elements.dialogueAnalyse.open) {
+    elements.dialogueAnalyse.scrollTop = 0;
   }
 }
 
@@ -456,11 +517,51 @@ elements.formulaireMedicament.addEventListener("submit", (evenement) => {
   elements.dialogueMedicament.close();
 });
 
-elements.boutonScanner.addEventListener("click", () => elements.champPhoto.click());
-elements.champPhoto.addEventListener("change", () => {
-  const fichier = elements.champPhoto.files && elements.champPhoto.files[0];
-  elements.champPhoto.value = "";
-  if (fichier) analyserPhoto(fichier);
+elements.champPhotoMaladie.addEventListener("change", () => {
+  const fichier = elements.champPhotoMaladie.files && elements.champPhotoMaladie.files[0];
+  elements.champPhotoMaladie.value = "";
+  if (fichier && maladieCible) scannerPourMaladie(maladieCible, fichier);
+});
+
+elements.listeAnalyse.addEventListener("click", (evenement) => {
+  const retirer = evenement.target.closest("[data-retirer]");
+  if (!retirer) return;
+  const ligne = retirer.closest(".ligne-analyse");
+  if (ligne) ligne.remove();
+  majBoutonAnalyse();
+});
+
+elements.listeAnalyse.addEventListener("change", (evenement) => {
+  if (evenement.target.matches('input[type="checkbox"]')) majBoutonAnalyse();
+});
+
+elements.formulaireAnalyse.addEventListener("submit", (evenement) => {
+  evenement.preventDefault();
+  const maladie = trouverMaladie(maladieCible);
+  if (!maladie) return;
+  const ajouts = [];
+  for (const ligne of elements.listeAnalyse.querySelectorAll(".ligne-analyse")) {
+    const coche = ligne.querySelector('input[type="checkbox"]').checked;
+    const nom = ligne.querySelector('[data-champ="nom"]').value.trim();
+    if (!coche || !nom) continue;
+    const duree = parseInt(ligne.querySelector('[data-champ="dureeJours"]').value, 10);
+    ajouts.push({
+      id: creerId(),
+      nom,
+      posologie: ligne.querySelector('[data-champ="posologie"]').value.trim(),
+      dureeJours: Math.min(Math.max(duree || 7, 1), 365),
+      debut: null
+    });
+  }
+  if (!ajouts.length) {
+    notifier("Aucun médicament retenu : cochez une ligne et renseignez son nom.");
+    return;
+  }
+  maladie.medicaments.push(...ajouts);
+  sauvegarder();
+  rendre();
+  elements.dialogueAnalyse.close();
+  notifier(`${ajouts.length} médicament${ajouts.length > 1 ? "s" : ""} ajouté${ajouts.length > 1 ? "s" : ""}.`);
 });
 
 elements.liste.addEventListener("click", (evenement) => {
@@ -479,6 +580,14 @@ elements.liste.addEventListener("click", (evenement) => {
     case "imprimer-carte":
       imprimer(idMaladie);
       break;
+
+    case "scanner-ordonnance": {
+      const maladie = trouverMaladie(idMaladie);
+      if (!maladie) break;
+      maladieCible = idMaladie;
+      elements.champPhotoMaladie.click();
+      break;
+    }
 
     case "supprimer-maladie": {
       const maladie = trouverMaladie(idMaladie);

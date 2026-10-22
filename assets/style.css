@@ -399,6 +399,49 @@ ul { padding: 0; list-style: none; }
   padding: .5rem;
 }
 
+/* ---------- Aperçu d'analyse d'ordonnance ---------- */
+
+.dialogue--large { width: min(560px, calc(100vw - 2rem)); }
+
+.analyse {
+  display: grid;
+  gap: .55rem;
+  max-height: 52vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.ligne-analyse {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .5rem;
+  padding: .6rem;
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon-petit);
+  background: var(--surface-douce);
+}
+
+.ligne-analyse__choix { display: flex; align-items: flex-start; padding-top: .35rem; }
+.ligne-analyse__choix input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }
+
+.ligne-analyse__champs { display: grid; gap: .4rem; min-width: 0; }
+
+.ligne-analyse__pied {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+.ligne-analyse__duree {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .78rem;
+  color: var(--texte-doux);
+}
+.ligne-analyse__duree input { width: 5rem; }
+
 /* ---------- Notifications ---------- */
 
 .notifications {
@@ -478,6 +521,10 @@ ul { padding: 0; list-style: none; }
   .carte__actions,
   .medicament__actions,
   .lien-evitement { display: none !important; }
+
+  /* Sur papier : ni état, ni jours restants — seulement la durée et la date de fin. */
+  .pastille,
+  .ecran-seul { display: none !important; }
 
   .impression-titre { display: block; font-size: 9pt; color: var(--texte-doux); margin: 0; }
   .impression-pied {

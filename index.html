@@ -82,21 +82,6 @@
       <form id="formulaire-medicament" class="formulaire">
         <h2 id="titre-dialogue-medicament" class="dialogue__titre">Nouveau médicament</h2>
 
-        <div class="scan">
-          <input id="champ-photo" type="file" accept="image/*" capture="environment" hidden>
-          <button id="bouton-scanner" class="bouton bouton--scan" type="button">
-            Scanner une ordonnance
-          </button>
-          <p class="scan__aide">
-            Photo ou import : la reconnaissance du texte est faite sur cet appareil (aucun envoi).
-          </p>
-          <p id="etat-scan" class="scan__etat" aria-live="polite"></p>
-          <details id="details-texte" class="scan__details" hidden>
-            <summary>Texte reconnu</summary>
-            <pre id="texte-reconnu" class="scan__texte"></pre>
-          </details>
-        </div>
-
         <label class="champ">
           <span class="champ__libelle">Médicament</span>
           <input class="champ__saisie" name="nom" type="text" required maxlength="80"
@@ -126,6 +111,27 @@
     </dialog>
 
     <p class="impression-pied">Données saisies et conservées sur l'appareil de l'utilisateur — MonSuiviOrdo</p>
+
+    <input id="champ-photo-maladie" type="file" accept="image/*" capture="environment" hidden>
+
+    <dialog id="dialogue-analyse" class="dialogue dialogue--large" aria-labelledby="titre-analyse">
+      <form id="formulaire-analyse" class="formulaire">
+        <h2 id="titre-analyse" class="dialogue__titre">Médicaments détectés</h2>
+        <p class="dialogue__message">
+          Relisez et corrigez chaque médicament, décochez ce qui ne doit pas être ajouté.
+        </p>
+        <p id="etat-analyse" class="scan__etat" aria-live="polite"></p>
+        <div id="liste-analyse" class="analyse"></div>
+        <details id="details-analyse" class="scan__details" hidden>
+          <summary>Texte reconnu</summary>
+          <pre id="texte-analyse" class="scan__texte"></pre>
+        </details>
+        <div class="dialogue__actions">
+          <button type="button" class="bouton bouton--discret" data-fermer>Annuler</button>
+          <button type="submit" class="bouton bouton--principal" id="bouton-ajouter-analyse">Ajouter</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="dialogue-confirmation" class="dialogue" aria-labelledby="titre-confirmation">
       <form method="dialog" class="formulaire">
