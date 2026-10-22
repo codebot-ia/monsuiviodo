@@ -258,9 +258,18 @@ ul { padding: 0; list-style: none; }
 }
 .bouton--discret:hover { color: var(--texte); }
 
-.bouton--petit { font-size: .78rem; padding: .34rem .6rem; }
+.bouton--petit {
+  font-size: .78rem;
+  padding: .34rem .6rem;
+  background: var(--surface);
+  border-color: var(--bord);
+}
+.bouton--petit.bouton--principal {
+  background: linear-gradient(180deg, var(--accent-clair), var(--accent));
+  border-color: transparent;
+}
 
-.bouton--danger { color: var(--danger); background: transparent; border-color: var(--bord); }
+.bouton--danger { color: var(--danger); background: var(--surface); border-color: var(--bord); }
 .bouton--danger:hover { background: var(--danger-doux); border-color: var(--danger); }
 
 /* Bouton de suppression armé : le second clic confirme. */

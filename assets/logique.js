@@ -185,8 +185,12 @@ export function extraireIndices(texte) {
 export function resumer(donnees, aujourdHui = aujourdHuiISO()) {
   const maladies = (donnees && donnees.maladies) || [];
   if (!maladies.length) return "";
-  const enCours = maladies.filter((m) => etatMaladie(m, aujourdHui) === "en-cours").length;
+  const enCours = maladies.reduce(
+    (total, maladie) => total + (maladie.medicaments || []).filter((medicament) => etatMedicament(medicament, aujourdHui) === "en-cours").length,
+    0
+  );
   const parties = [`${maladies.length} maladie${maladies.length > 1 ? "s" : ""}`];
-  parties.push(enCours ? `${enCours} traitement${enCours > 1 ? "s" : ""} en cours` : "aucun traitement en cours");
+  if (enCours) parties.push(`${enCours} médicament${enCours > 1 ? "s" : ""} en cours`);
+  else parties.push("aucun traitement en cours");
   return parties.join(" · ");
 }
