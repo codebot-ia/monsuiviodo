@@ -58,6 +58,7 @@ let invitationInstallation = null;
 let chargementTesseract = null;
 let suppressionArmee = null; // clé du bouton « Supprimer » déjà cliqué une fois
 let minuteurSuppression = null;
+const cartesOuvertes = new Set(); // maladies dépliées (repliées par défaut)
 
 /* ------------------------------------------------------------------ utilitaires */
 
@@ -181,25 +182,36 @@ function texteSousTitre(maladie, aujourdHui) {
 
 function construireCarte(maladie, aujourdHui) {
   const article = document.createElement("article");
-  article.className = "carte";
+  const ouverte = cartesOuvertes.has(maladie.id);
+  const nombre = maladie.medicaments.length;
+  article.className = `carte ${ouverte ? "carte--ouverte" : "carte--repliee"}`;
   article.dataset.maladie = maladie.id;
   const lignes = maladie.medicaments.map((medicament) => construireLigneMedicament(medicament, aujourdHui)).join("");
   article.innerHTML = `
     <header class="carte__entete">
-      <div>
-        <h2 class="carte__titre">${echapper(maladie.nom)}</h2>
-        <p class="carte__sous-titre">${texteSousTitre(maladie, aujourdHui)}</p>
-      </div>
+      <h2 class="carte__titre-ligne">
+        <button type="button" class="carte__bascule" data-action="basculer-maladie"
+                aria-expanded="${ouverte}" aria-controls="corps-${maladie.id}">
+          <span class="carte__entete-texte">
+            <span class="carte__titre">${echapper(maladie.nom)}</span>
+            <span class="carte__sous-titre">${texteSousTitre(maladie, aujourdHui)}</span>
+          </span>
+          ${nombre ? `<span class="carte__compte" aria-hidden="true">${nombre}</span>` : ""}
+          <span class="carte__chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
+    </header>
+    <div class="carte__corps" id="corps-${maladie.id}">
       <div class="carte__actions">
         <button type="button" class="bouton bouton--petit" data-action="ajouter-medicament">+ Médicament</button>
         <button type="button" class="bouton bouton--petit" data-action="scanner-ordonnance">Scanner</button>
         <button type="button" class="bouton bouton--petit" data-action="imprimer-carte">Imprimer</button>
         <button type="button" class="bouton bouton--petit bouton--danger" data-action="supprimer-maladie">Supprimer</button>
       </div>
-    </header>
-    ${maladie.medicaments.length
-      ? `<ul class="medicaments">${lignes}</ul>`
-      : `<p class="carte__vide">Ajoutez les médicaments prescrits pour cette maladie.</p>`}
+      ${nombre
+        ? `<ul class="medicaments">${lignes}</ul>`
+        : `<p class="carte__vide">Ajoutez les médicaments prescrits pour cette maladie.</p>`}
+    </div>
   `;
   return article;
 }
@@ -215,7 +227,7 @@ function construireLigneMedicament(medicament, aujourdHui) {
     ? `Du ${formaterDate(medicament.debut)} au ${formaterDate(fin)} · ${duree}`
     : `<span class="ecran-seul">Durée prévue : </span>${duree}<span class="ecran-seul"> · pas encore démarré</span>`;
   const boutonDebut = medicament.debut
-    ? `<button type="button" class="bouton bouton--petit" data-action="annuler-debut">Annuler le début</button>`
+    ? `<button type="button" class="bouton bouton--petit" data-action="annuler-debut">Annuler</button>`
     : `<button type="button" class="bouton bouton--petit bouton--principal" data-action="demarrer">Début</button>`;
 
   return `
@@ -529,6 +541,7 @@ elements.formulaireMedicament.addEventListener("submit", (evenement) => {
   evenement.preventDefault();
   const maladie = trouverMaladie(maladieCible);
   if (!maladie) return;
+  cartesOuvertes.add(maladie.id);
   const formulaire = elements.formulaireMedicament.elements;
   const nom = formulaire.nom.value.trim();
   if (!nom) return;
@@ -576,6 +589,7 @@ elements.formulaireAnalyse.addEventListener("submit", (evenement) => {
   evenement.preventDefault();
   const maladie = trouverMaladie(maladieCible);
   if (!maladie) return;
+  cartesOuvertes.add(maladie.id);
   const ajouts = [];
   for (const ligne of elements.listeAnalyse.querySelectorAll(".ligne-analyse")) {
     const coche = ligne.querySelector('input[type="checkbox"]').checked;
@@ -610,7 +624,21 @@ elements.liste.addEventListener("click", (evenement) => {
   const idMedicament = ligne ? ligne.dataset.medicament : null;
 
   switch (bouton.dataset.action) {
+    case "basculer-maladie": {
+      const article = bouton.closest(".carte");
+      const id = article ? article.dataset.maladie : null;
+      if (!id) break;
+      if (cartesOuvertes.has(id)) cartesOuvertes.delete(id);
+      else cartesOuvertes.add(id);
+      const desormaisOuverte = cartesOuvertes.has(id);
+      article.classList.toggle("carte--ouverte", desormaisOuverte);
+      article.classList.toggle("carte--repliee", !desormaisOuverte);
+      bouton.setAttribute("aria-expanded", String(desormaisOuverte));
+      break;
+    }
+
     case "ajouter-medicament":
+      if (idMaladie) cartesOuvertes.add(idMaladie);
       ouvrirDialogueMedicament(idMaladie, null);
       break;
 
@@ -622,6 +650,7 @@ elements.liste.addEventListener("click", (evenement) => {
       const maladie = trouverMaladie(idMaladie);
       if (!maladie) break;
       maladieCible = idMaladie;
+      cartesOuvertes.add(idMaladie);
       elements.champPhotoMaladie.click();
       break;
     }
