@@ -264,10 +264,6 @@ function ouvrirDialogueMedicament(idMaladie, idMedicament) {
   maladieCible = idMaladie;
   medicamentCible = idMedicament || null;
   elements.formulaireMedicament.reset();
-  elements.etatScan.textContent = "";
-  elements.detailsTexte.hidden = true;
-  elements.detailsTexte.open = false;
-  elements.texteReconnu.textContent = "";
 
   if (medicamentCible) {
     const medicament = maladie.medicaments.find((m) => m.id === medicamentCible);
@@ -893,5 +889,21 @@ window.addEventListener("pointermove", surDeplacement, { passive: false });
 window.addEventListener("pointerup", terminerAppui);
 window.addEventListener("pointercancel", annulerAppui);
 window.addEventListener("blur", annulerAppui);
+
+// Quand le clavier mobile s'ouvre, on recentre le champ actif dans la fenêtre :
+// sans ça, une fenêtre haute (aperçu de scan, formulaire) passe sous le clavier.
+document.addEventListener("focusin", (evenement) => {
+  const champ = evenement.target;
+  if (!champ || !champ.matches("input, textarea, select")) return;
+  const dialogue = champ.closest("dialog");
+  if (!dialogue) return;
+  window.setTimeout(() => {
+    try {
+      champ.scrollIntoView({ block: "center", behavior: "smooth" });
+    } catch (erreur) {
+      champ.scrollIntoView();
+    }
+  }, 280);
+});
 
 rendre();

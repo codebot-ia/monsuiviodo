@@ -412,6 +412,10 @@ body.glisser-en-cours .carte:not(.carte--glissee) { opacity: .65; }
   border-radius: 20px;
   padding: 0;
   width: min(480px, calc(100vw - 2rem));
+  /* Clavier mobile : la fenêtre reste dans l'écran visible et défile. */
+  max-height: calc(100dvh - 1rem);
+  overflow: auto;
+  overscroll-behavior: contain;
   background: var(--surface);
   color: var(--texte);
   box-shadow: 0 24px 60px -20px rgba(9, 25, 35, .5);
