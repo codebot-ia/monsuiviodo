@@ -38,6 +38,7 @@ const elements = {
   dialogueMedicament: document.getElementById("dialogue-medicament"),
   formulaireMedicament: document.getElementById("formulaire-medicament"),
   titreDialogueMedicament: document.getElementById("titre-dialogue-medicament"),
+  impressionDate: document.getElementById("impression-date"),
   dialogueConfirmation: document.getElementById("dialogue-confirmation"),
   messageConfirmation: document.getElementById("message-confirmation"),
   boutonScanner: document.getElementById("bouton-scanner"),
@@ -268,10 +269,16 @@ function reinitialiserImpression() {
 
 function imprimer(idMaladie) {
   reinitialiserImpression();
+  let complement = "";
   if (idMaladie) {
     document.body.classList.add("impression-unique");
     const carte = elements.liste.querySelector(`[data-maladie="${idMaladie}"]`);
     if (carte) carte.classList.add("carte--imprimee");
+    const maladie = trouverMaladie(idMaladie);
+    if (maladie) complement = ` · ${maladie.nom}`;
+  }
+  if (elements.impressionDate) {
+    elements.impressionDate.textContent = `${complement} — document édité le ${formaterDate(aujourdHuiISO())}`;
   }
   window.addEventListener("afterprint", reinitialiserImpression, { once: true });
   window.setTimeout(() => window.print(), 60);
