@@ -59,6 +59,8 @@ let chargementTesseract = null;
 let suppressionArmee = null; // clé du bouton « Supprimer » déjà cliqué une fois
 let minuteurSuppression = null;
 const cartesOuvertes = new Set(); // maladies dépliées (repliées par défaut)
+let glisser = null; // { carte, bouton, x, y, actif, minuteur }
+let clicBloque = false; // vrai juste après un glisser, pour ne pas replier la carte
 
 /* ------------------------------------------------------------------ utilitaires */
 
@@ -197,6 +199,7 @@ function construireCarte(maladie, aujourdHui) {
             <span class="carte__sous-titre">${texteSousTitre(maladie, aujourdHui)}</span>
           </span>
           ${nombre ? `<span class="carte__compte" aria-hidden="true">${nombre}</span>` : ""}
+          <span class="carte__poignee" aria-hidden="true"></span>
           <span class="carte__chevron" aria-hidden="true"></span>
         </button>
       </h2>
@@ -616,6 +619,12 @@ elements.formulaireAnalyse.addEventListener("submit", (evenement) => {
 });
 
 elements.liste.addEventListener("click", (evenement) => {
+  // Un glisser-déposer vient de se terminer : on n'ouvre pas la carte.
+  if (clicBloque) {
+    evenement.preventDefault();
+    evenement.stopPropagation();
+    return;
+  }
   const bouton = evenement.target.closest("button[data-action]");
   if (!bouton) return;
   const carte = bouton.closest("[data-maladie]");
@@ -744,5 +753,84 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
+
+/* ------------------------------------------------------------------ ordre des maladies */
+
+// Appui long puis glisser pour réordonner les maladies.
+const DELAI_APPUI = 350; // ms
+
+function demarrerAppui(evenement) {
+  if (evenement.button !== undefined && evenement.button !== 0) return;
+  const bouton = evenement.target.closest(".carte__bascule");
+  if (!bouton) return;
+  const carte = bouton.closest("[data-maladie]");
+  if (!carte || etat.maladies.length < 2) return;
+  glisser = { carte, bouton, x: evenement.clientX, y: evenement.clientY, actif: false };
+  glisser.minuteur = window.setTimeout(() => {
+    if (!glisser) return;
+    glisser.actif = true;
+    carte.classList.add("carte--glissee");
+    document.body.classList.add("glisser-en-cours");
+    if (navigator.vibrate) {
+      try { navigator.vibrate(12); } catch (erreur) { /* sans importance */ }
+    }
+  }, DELAI_APPUI);
+}
+
+function annulerAppui() {
+  if (!glisser) return;
+  window.clearTimeout(glisser.minuteur);
+  glisser.carte.classList.remove("carte--glissee");
+  document.body.classList.remove("glisser-en-cours");
+  glisser = null;
+}
+
+function surDeplacement(evenement) {
+  if (!glisser) return;
+  if (!glisser.actif) {
+    // Bouger avant la fin de l'appui = défilement ou clic normal.
+    if (Math.hypot(evenement.clientX - glisser.x, evenement.clientY - glisser.y) > 10) annulerAppui();
+    return;
+  }
+  evenement.preventDefault();
+  const autres = [...elements.liste.querySelectorAll(".carte")].filter((carte) => carte !== glisser.carte);
+  const avant = autres.find((carte) => {
+    const rect = carte.getBoundingClientRect();
+    return evenement.clientY < rect.top + rect.height / 2;
+  });
+  if (avant) elements.liste.insertBefore(glisser.carte, avant);
+  else elements.liste.appendChild(glisser.carte);
+}
+
+function terminerAppui() {
+  if (!glisser) return;
+  window.clearTimeout(glisser.minuteur);
+  const aGlisse = glisser.actif;
+  glisser.carte.classList.remove("carte--glissee");
+  document.body.classList.remove("glisser-en-cours");
+  glisser = null;
+  if (!aGlisse) return;
+
+  const ordre = [...elements.liste.querySelectorAll(".carte")].map((carte) => carte.dataset.maladie);
+  etat.maladies.sort((a, b) => ordre.indexOf(a.id) - ordre.indexOf(b.id));
+  sauvegarder();
+  clicBloque = true;
+  window.setTimeout(() => { clicBloque = false; }, 350);
+  notifier("Ordre des maladies enregistré.");
+}
+
+elements.liste.addEventListener("pointerdown", demarrerAppui);
+// Pendant le glisser seulement, on empêche la page de défiler ; sinon un
+// simple appui sur l'en-tête continue de faire défiler normalement.
+elements.liste.addEventListener("touchmove", (evenement) => {
+  if (glisser && glisser.actif) evenement.preventDefault();
+}, { passive: false });
+elements.liste.addEventListener("contextmenu", (evenement) => {
+  if (glisser && glisser.actif) evenement.preventDefault();
+});
+window.addEventListener("pointermove", surDeplacement, { passive: false });
+window.addEventListener("pointerup", terminerAppui);
+window.addEventListener("pointercancel", annulerAppui);
+window.addEventListener("blur", annulerAppui);
 
 rendre();

@@ -187,6 +187,30 @@ ul { padding: 0; list-style: none; }
   text-align: center;
 }
 
+/* Poignée de glisser (indice visuel) */
+.carte__poignee {
+  flex: none;
+  width: 1rem;
+  height: .9rem;
+  opacity: .26;
+  background-image: radial-gradient(circle, currentColor 1.1px, transparent 1.3px);
+  background-size: .34rem .3rem;
+  transition: opacity .15s ease;
+}
+.carte__bascule:hover .carte__poignee,
+.carte--glissee .carte__poignee { opacity: .6; }
+
+/* Carte en cours de déplacement */
+.carte--glissee {
+  position: relative;
+  z-index: 5;
+  border-color: var(--accent);
+  box-shadow: 0 16px 34px rgba(6, 20, 28, .3);
+  transform: scale(1.012);
+}
+body.glisser-en-cours { cursor: grabbing; }
+body.glisser-en-cours .carte:not(.carte--glissee) { opacity: .65; }
+
 .carte__chevron {
   flex: none;
   width: .6rem;
@@ -197,7 +221,31 @@ ul { padding: 0; list-style: none; }
   transform: rotate(45deg);
   transition: transform .18s ease;
 }
-.carte--ouverte .carte__chevron { transform: rotate(-135deg); }
+.carte--ouverte /* Poignée de glisser (indice visuel) */
+.carte__poignee {
+  flex: none;
+  width: 1rem;
+  height: .9rem;
+  opacity: .26;
+  background-image: radial-gradient(circle, currentColor 1.1px, transparent 1.3px);
+  background-size: .34rem .3rem;
+  transition: opacity .15s ease;
+}
+.carte__bascule:hover .carte__poignee,
+.carte--glissee .carte__poignee { opacity: .6; }
+
+/* Carte en cours de déplacement */
+.carte--glissee {
+  position: relative;
+  z-index: 5;
+  border-color: var(--accent);
+  box-shadow: 0 16px 34px rgba(6, 20, 28, .3);
+  transform: scale(1.012);
+}
+body.glisser-en-cours { cursor: grabbing; }
+body.glisser-en-cours .carte:not(.carte--glissee) { opacity: .65; }
+
+.carte__chevron { transform: rotate(-135deg); }
 .carte--ouverte .carte__compte { display: none; }
 
 .carte__corps { margin-top: .9rem; }
