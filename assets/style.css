@@ -485,6 +485,25 @@ ul { padding: 0; list-style: none; }
 }
 .ligne-analyse__duree input { width: 5rem; }
 
+/* Posologie : zone de texte pour voir toute la description, même sur mobile. */
+.champ__saisie--zone {
+  resize: vertical;
+  min-height: 2.9rem;
+  line-height: 1.45;
+  font-family: inherit;
+}
+
+/* Bouton « Retirer » : cible tactile confortable, jamais écrasée. */
+.ligne-analyse__pied { flex-wrap: wrap; }
+.ligne-analyse__pied .bouton--petit {
+  margin-left: auto;
+  flex: none;
+  min-height: 2.75rem;
+  padding: .5rem .9rem;
+  font-size: .82rem;
+  font-weight: 600;
+}
+
 /* ---------- Notifications ---------- */
 
 .notifications {

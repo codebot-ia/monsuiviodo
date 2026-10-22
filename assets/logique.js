@@ -149,6 +149,7 @@ const MOTIF_FORME = /(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|bo
 const MOTIF_RYTHME = /(matin|midi|soir|nuit|coucher|repas|par jour|\/\s*j|toutes les|\d+\s*fois|fois par)/i;
 const MOTIF_EMBALLAGE = /\b(CPR|COMPR|GELULES?|GEL|G[EÉ]L|SUSP|SOLU?|SP|S\/S|TUBE|FL|AMP|BUV|EFF|LP|ZTV|NAS|PULV|SIROP|CR[EÈ]ME|POM|SUPPO|SACHET|COLLYRE|INJ|STICK|PDRE|DRAG|OVULE)\b/gi;
 const MOTIF_BRUIT = /(ordonnance|pharmacie|pharmacien|docteur|m[ée]decin|membre|association|assurance|r[ée]glement|honoraires|ch[eè]que|accepte|conventionn|garde|ameli|https?|www\.|prescription|produits?|patient|titulaire|autorit[ée]|donn[ée]es|transmises|[ée]lectroniquement|droits|signature|cachet|merci|confiance|cordialement|conserver|posologie|notice|g[ée]n[ée]rique|substitu|rpps|\bam\b|t[ée]l\b|\bdr\b|adresse|box|bo[îi]te|renouvel|date|apicrypt|e-mail|mail|code[- ]?barre|\bean\b|\blot\b)/i;
+const MOTIF_ETIQUETTE = /^\s*(?:n[°o]\s*\.?\s*)?(rpps|adeli|finess|siret|siren|lot|am\b|ordre\s+des)|^\s*n[°o]\s*$/i;
 const MOTIF_DEBUT_POSOLOGIE = /\s+\d+\s*(?:à\s*\d+\s*)?(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|dose|application|bouff[ée]e|injection)/i;
 
 /** Un dosage pharmaceutique est-il présent (tolérance OCR sur 0/O et 1/I/l) ? */
@@ -246,6 +247,15 @@ function estLigneParasite(ligne) {
   return chiffres > 0 && lettres < 4 && chiffres >= lettres;
 }
 
+/** Valeur d'une étiquette administrative (RPPS, AM, lot…) collée à la ligne suivante ? */
+function estValeurIdentifiant(ligne) {
+  const t = String(ligne).trim();
+  if (!t || t.length > 40) return false;
+  if (estNomDeMedicament(t, "")) return false;
+  if (estLignePosologie(t)) return false;
+  return !aUnDosage(t) && compterEmballages(t) === 0;
+}
+
 /**
  * Analyse le texte d'une ordonnance et renvoie le motif éventuel ainsi que la
  * liste des médicaments détectés : [{ nom, posologie, dureeJours }].
@@ -269,7 +279,19 @@ export function extraireOrdonnance(texte) {
 
   const blocs = [];
   let bloc = null;
+  let lignesAIgnorer = 0;
   lignes.forEach((ligne, index) => {
+    if (lignesAIgnorer > 0) {
+      lignesAIgnorer -= 1;
+      return;
+    }
+    // « N° RPPS », « N° AM », « Lot »… : la valeur (nom, numéro) est sur la
+    // ligne suivante, ce n'est jamais un médicament.
+    if (MOTIF_ETIQUETTE.test(ligne)) {
+      const suivante = lignes[index + 1] || "";
+      if (!/\d{3,}/.test(ligne) && suivante && estValeurIdentifiant(suivante)) lignesAIgnorer = 1;
+      return;
+    }
     if (estNomDeMedicament(ligne, lignes[index + 1])) {
       if (bloc) blocs.push(bloc);
       const { nom, reste } = separerNomEtPosologie(ligne);

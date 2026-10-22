@@ -463,8 +463,8 @@ function ajouterLigneAnalyse(valeurs) {
     <div class="ligne-analyse__champs">
       <input class="champ__saisie" data-champ="nom" type="text" maxlength="80"
              placeholder="Médicament" aria-label="Médicament" value="${echapper(valeurs.nom || "")}">
-      <input class="champ__saisie" data-champ="posologie" type="text" maxlength="120"
-             placeholder="Posologie" aria-label="Posologie" value="${echapper(valeurs.posologie || "")}">
+      <textarea class="champ__saisie champ__saisie--zone" data-champ="posologie" rows="2" maxlength="220"
+                placeholder="Posologie" aria-label="Posologie">${echapper(valeurs.posologie || "")}</textarea>
       <div class="ligne-analyse__pied">
         <label class="ligne-analyse__duree">
           <span>Durée (jours)</span>
