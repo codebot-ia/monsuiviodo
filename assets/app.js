@@ -356,11 +356,42 @@ function chargerTesseract() {
   return chargementTesseract;
 }
 
+/**
+ * Prépare la photo avant OCR : agrandissement, niveaux de gris, contraste.
+ * Une ordonnance photographiée donne de bien meilleurs résultats ainsi.
+ */
+async function preparerImage(fichier) {
+  try {
+    const bitmap = await createImageBitmap(fichier);
+    const largeurCible = Math.min(2200, Math.max(1400, bitmap.width));
+    const echelle = largeurCible / bitmap.width;
+    const canevas = document.createElement("canvas");
+    canevas.width = Math.round(bitmap.width * echelle);
+    canevas.height = Math.round(bitmap.height * echelle);
+    const contexte = canevas.getContext("2d", { willReadFrequently: true });
+    contexte.drawImage(bitmap, 0, 0, canevas.width, canevas.height);
+    const image = contexte.getImageData(0, 0, canevas.width, canevas.height);
+    const donnees = image.data;
+    for (let i = 0; i < donnees.length; i += 4) {
+      const gris = 0.299 * donnees[i] + 0.587 * donnees[i + 1] + 0.114 * donnees[i + 2];
+      const contraste = Math.max(0, Math.min(255, (gris - 140) * 1.45 + 140));
+      donnees[i] = donnees[i + 1] = donnees[i + 2] = contraste;
+    }
+    contexte.putImageData(image, 0, 0);
+    return canevas;
+  } catch (erreur) {
+    console.warn("Préparation de l'image impossible, photo brute utilisée", erreur);
+    return fichier;
+  }
+}
+
 /** Lance l'OCR locale sur une photo et renvoie le texte reconnu. */
 async function lireTexte(fichier) {
+  elements.etatAnalyse.textContent = "Préparation de l'image…";
+  const source = await preparerImage(fichier);
   elements.etatAnalyse.textContent = "Chargement du moteur de reconnaissance (une seule fois)…";
   const Tesseract = await chargerTesseract();
-  elements.etatAnalyse.textContent = "Préparation de la reconnaissance…";
+  elements.etatAnalyse.textContent = "Reconnaissance en cours…";
   const worker = await Tesseract.createWorker("fra", 1, {
     logger: (m) => {
       if (m.status === "recognizing text") {
@@ -368,7 +399,13 @@ async function lireTexte(fichier) {
       }
     }
   });
-  const { data } = await worker.recognize(fichier);
+  // Colonne unique de texte et espaces conservés : indispensable pour séparer
+  // les noms de médicaments de leur posologie.
+  await worker.setParameters({
+    tessedit_pageseg_mode: "4",
+    preserve_interword_spaces: "1"
+  });
+  const { data } = await worker.recognize(source);
   await worker.terminate();
   return (data && data.text ? data.text : "").trim();
 }

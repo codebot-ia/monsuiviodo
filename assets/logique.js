@@ -145,48 +145,92 @@ export function normaliserDonnees(brut) {
 
 /* ------------------------------------------------------------------ lecture d'ordonnance */
 
-const MOTIF_DOSE = /(\d+\s*(?:comprim|cp\b|g[ée]lul|sachet|dose|goutte|ml\b|ampoul|suppo|bouff[ée]e|application|pulv[ée]))/i;
-const MOTIF_RYTHME = /(matin|midi|soir|nuit|coucher|repas|par jour|\/\s*j|toutes les|fois par)/i;
-const MOTIF_DOSAGE = /\d+\s*(?:mg|g\b|ui\b|mcg|%|mg\/ml|dose)/i;
-const MOTIF_BRUIT = /(ordonnance|pharmacie|pharmacien|docteur|m[ée]decin|\bdr\b|patient|posologie|traitement|dur[ée]e|signature|date|bo[îi]te|notice|conseil|ne pas d[ée]passer|renouvel|g[ée]n[ée]ric|substitu)/i;
+const MOTIF_FORME = /(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|bouff[ée]e|application|injection|suppositoire|dose|lavement)/i;
+const MOTIF_RYTHME = /(matin|midi|soir|nuit|coucher|repas|par jour|\/\s*j|toutes les|\d+\s*fois|fois par)/i;
+const MOTIF_EMBALLAGE = /\b(CPR|COMPR|GELULES?|GEL|G[EÉ]L|SUSP|SOLU?|SP|S\/S|TUBE|FL|AMP|BUV|EFF|LP|ZTV|NAS|PULV|SIROP|CR[EÈ]ME|POM|SUPPO|SACHET|COLLYRE|INJ|STICK|PDRE|DRAG|OVULE)\b/gi;
+const MOTIF_BRUIT = /(ordonnance|pharmacie|pharmacien|docteur|m[ée]decin|membre|association|assurance|r[ée]glement|honoraires|ch[eè]que|accepte|conventionn|garde|ameli|https?|www\.|prescription|produits?|patient|titulaire|autorit[ée]|donn[ée]es|transmises|[ée]lectroniquement|droits|signature|posologie|notice|g[ée]n[ée]rique|substitu|rpps|\bam\b|t[ée]l\b|\bdr\b|adresse|box|bo[îi]te|renouvel|date|apicrypt|e-mail|mail)/i;
+const MOTIF_DEBUT_POSOLOGIE = /\s+\d+\s*(?:à\s*\d+\s*)?(comprim|g[ée]lul|cuill|pulv[ée]risation|sachet|goutte|dose|application|bouff[ée]e|injection)/i;
 
-/** "7 jours" / "2 semaines" / "1 mois" -> nombre de jours (ou null). */
+/** Un dosage pharmaceutique est-il présent (tolérance OCR sur 0/O et 1/I/l) ? */
+function aUnDosage(ligne) {
+  const t = String(ligne).toUpperCase();
+  return (
+    /\d[\d\s.,]*[0-9OIL]{0,4}\s*(?:MG|MGI|MCG|UI)\b/.test(t) ||
+    /\b(?:MG|MGI|MCG|ML|UI)\s*\/\s*(?:ML|G|KG)\b/.test(t) ||
+    /\b\d[\dOIL]{0,4}\s*(?:ML|G|KG)\b/.test(t)
+  );
+}
+
+function compterEmballages(ligne) {
+  const trouves = String(ligne).match(MOTIF_EMBALLAGE);
+  return trouves ? trouves.length : 0;
+}
+
+function estLignePosologie(ligne) {
+  const t = String(ligne);
+  if (/^\d/.test(t) && MOTIF_FORME.test(t)) return true;
+  return MOTIF_FORME.test(t) && MOTIF_RYTHME.test(t) && !aUnDosage(t);
+}
+
+/** Vrai si la ligne ressemble au nom commercial d'un médicament. */
+function estNomDeMedicament(ligne, suivante) {
+  const t = String(ligne).trim();
+  if (t.length < 3 || t.length > 90) return false;
+  if (MOTIF_BRUIT.test(t)) return false;
+  if (estLignePosologie(t)) return false;
+  if (aUnDosage(t) || compterEmballages(t) >= 2) return true;
+  // Nom seul en majuscules, le dosage figurant sur la ligne suivante.
+  const enMajuscules = /^[A-ZÉÈÀÂÎÔÛÇ][A-ZÉÈÀÂÎÔÛÇ'’.\-\s]{2,45}$/.test(t);
+  if (enMajuscules && suivante) {
+    return aUnDosage(suivante) || compterEmballages(suivante) > 0;
+  }
+  return false;
+}
+
+/** Sépare un nom collé à sa posologie par l'OCR ("NOM 200MG 2 comprimés matin et soir"). */
+function separerNomEtPosologie(ligne) {
+  const trouve = String(ligne).match(MOTIF_DEBUT_POSOLOGIE);
+  if (!trouve || trouve.index === undefined || trouve.index < 3) return { nom: ligne, reste: "" };
+  return { nom: ligne.slice(0, trouve.index).trim(), reste: ligne.slice(trouve.index).trim() };
+}
+
+const NOMBRES = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, douze: 12, quinze: 15, vingt: 20 };
+
+function dureeEnJours(quantite, unite) {
+  const nombre = NOMBRES[String(quantite).toLowerCase()] || parseInt(quantite, 10);
+  if (!nombre || nombre < 1) return null;
+  const u = String(unite).toLowerCase();
+  let jours = nombre;
+  if (u.startsWith("semaine")) jours = nombre * 7;
+  else if (u.startsWith("mois")) jours = nombre * 30;
+  return Math.min(jours, 365);
+}
+
+/** "pendant 1 mois" / "durée : 2 semaines" / "5 jours" -> nombre de jours. */
 export function extraireDuree(texte) {
   const contenu = String(texte || "");
-  const mois = contenu.match(/(\d{1,2})\s*mois/i);
-  const semaines = contenu.match(/(\d{1,2})\s*semaines?/i);
-  const jours = contenu.match(/(\d{1,3})\s*(?:jours?|j(?![a-zéèà]))/i);
-  let duree = null;
-  if (mois) duree = parseInt(mois[1], 10) * 30;
-  else if (semaines) duree = parseInt(semaines[1], 10) * 7;
-  else if (jours) duree = parseInt(jours[1], 10);
-  if (!duree || duree < 1) return null;
-  return Math.min(duree, 365);
+  const quantites = "(\\d{1,3}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt)";
+  const unites = "(jours?|semaines?|mois)";
+  const avecPreposition = contenu.match(new RegExp(`(?:pendant|durant|pour|sur|dur[ée]e\\s*:?)\\s*${quantites}\\s*${unites}`, "i"));
+  if (avecPreposition) return dureeEnJours(avecPreposition[1], avecPreposition[2]);
+  const simple = contenu.match(new RegExp(`${quantites}\\s*${unites}\\b`, "i"));
+  if (simple) return dureeEnJours(simple[1], simple[2]);
+  return null;
 }
 
-/** Vrai si la ligne ressemble à un nom de médicament (majuscules ou dosage). */
-function estNomDeMedicament(ligne) {
-  if (ligne.length < 3 || ligne.length > 80) return false;
-  if (MOTIF_BRUIT.test(ligne)) return false;
-  if (MOTIF_DOSE.test(ligne) && MOTIF_RYTHME.test(ligne)) return false;
-  const majuscules = /^[A-ZÉÈÀÂÎÔÛÇ0-9][A-ZÉÈÀÂÎÔÛÇ0-9\s.'’\-/]{2,}$/.test(ligne);
-  const avecDosage = MOTIF_DOSAGE.test(ligne) && /^[A-Za-zÉÈÀÂÎÔÛÇ]/.test(ligne);
-  return majuscules || avecDosage;
-}
-
-/** Nettoie une ligne pour en faire une posologie lisible. */
 function nettoyerPosologie(ligne) {
-  return ligne
+  return String(ligne)
     .replace(/^[\s\-•*·]+/, "")
     .replace(/\s{2,}/g, " ")
-    .replace(/\s*pendant\s+\d+\s*(?:jours?|semaines?|mois)\s*$/i, "")
+    .replace(/\s*(?:pendant|durant|pour)\s+(?:\d{1,3}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|quinze|vingt)\s*(?:jours?|semaines?|mois)\b.*$/i, "")
+    .replace(/[.;,\s]+$/, "")
     .trim()
     .slice(0, 120);
 }
 
 /**
- * Analyse le texte d'une ordonnance entière et renvoie la maladie (si trouvée)
- * et la liste des médicaments détectés : [{ nom, posologie, dureeJours }].
+ * Analyse le texte d'une ordonnance et renvoie le motif éventuel ainsi que la
+ * liste des médicaments détectés : [{ nom, posologie, dureeJours }].
  * Les valeurs sont des propositions : l'utilisateur les relit et les corrige.
  */
 export function extraireOrdonnance(texte) {
@@ -194,8 +238,7 @@ export function extraireOrdonnance(texte) {
   const contenu = String(texte || "").replace(/\r/g, "");
   if (!contenu.trim()) return resultat;
 
-  // Motif / diagnostic, quand l'ordonnance le mentionne.
-  const motif = contenu.match(/(?:pour|motif|diagnostic|indication)\s*:?\s*([A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç' \-]{3,60})/i);
+  const motif = contenu.match(/(?:motif|diagnostic|indication)\s*:?\s*([A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç' \-]{3,60})/i);
   if (motif) {
     const candidat = motif[1].trim().replace(/\s{2,}/g, " ");
     if (candidat && !MOTIF_BRUIT.test(candidat)) resultat.maladie = candidat;
@@ -204,47 +247,40 @@ export function extraireOrdonnance(texte) {
   const lignes = contenu
     .split("\n")
     .map((ligne) => ligne.replace(/\s+/g, " ").trim())
-    .filter((ligne) => ligne.length > 1);
+    .filter((ligne) => ligne.length > 1 && /[A-Za-zÉÈÀÂÎÔÛÇéèêàâîïôûç]/.test(ligne));
 
-  // Découpage en blocs : un bloc démarre sur un nom de médicament.
   const blocs = [];
   let bloc = null;
-  for (const ligne of lignes) {
-    if (estNomDeMedicament(ligne)) {
+  lignes.forEach((ligne, index) => {
+    if (estNomDeMedicament(ligne, lignes[index + 1])) {
       if (bloc) blocs.push(bloc);
-      bloc = { nom: ligne, details: [] };
-    } else if (bloc) {
+      const { nom, reste } = separerNomEtPosologie(ligne);
+      bloc = { nom, details: reste ? [reste] : [] };
+    } else if (bloc && bloc.details.length < 4 && !MOTIF_BRUIT.test(ligne)) {
       bloc.details.push(ligne);
     }
-  }
+  });
   if (bloc) blocs.push(bloc);
 
   for (const element of blocs) {
     const texteBloc = [element.nom, ...element.details].join(" ");
-    const posologie = element.details.find((ligne) => MOTIF_DOSE.test(ligne) && MOTIF_RYTHME.test(ligne))
-      || element.details.find((ligne) => MOTIF_DOSE.test(ligne))
-      || "";
-    const duree = extraireDuree(texteBloc);
+    const candidats = element.details.filter((ligne) => MOTIF_FORME.test(ligne) || /\d/.test(ligne));
+    const posologie = candidats.find((ligne) => MOTIF_FORME.test(ligne) && MOTIF_RYTHME.test(ligne)) || candidats[0] || "";
     resultat.medicaments.push({
       nom: element.nom.replace(/\s{2,}/g, " ").slice(0, 80),
       posologie: posologie ? nettoyerPosologie(posologie) : "",
-      dureeJours: duree || 7
+      dureeJours: extraireDuree(texteBloc)
     });
   }
 
-  // Repli : aucune ligne « nom » reconnue, mais une posologie existe.
+  // Repli : aucun nom reconnu, mais une posologie exploitable existe.
   if (!resultat.medicaments.length) {
-    const posologie = lignes.find((ligne) => MOTIF_DOSE.test(ligne) && MOTIF_RYTHME.test(ligne));
+    const posologie = lignes.find((ligne) => MOTIF_FORME.test(ligne) && MOTIF_RYTHME.test(ligne));
     if (posologie) {
-      resultat.medicaments.push({
-        nom: "",
-        posologie: nettoyerPosologie(posologie),
-        dureeJours: extraireDuree(contenu) || 7
-      });
+      resultat.medicaments.push({ nom: "", posologie: nettoyerPosologie(posologie), dureeJours: extraireDuree(contenu) });
     }
   }
 
-  // Doublons exacts (même nom et même posologie) supprimés.
   const vus = new Set();
   resultat.medicaments = resultat.medicaments.filter((medicament) => {
     const cle = `${medicament.nom}|${medicament.posologie}`;
