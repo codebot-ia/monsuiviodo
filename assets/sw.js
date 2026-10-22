@@ -1,5 +1,5 @@
 /* MonSuiviOrdo — service worker : application disponible hors ligne. */
-const VERSION = "monsuiviodo-v4";
+const VERSION = "monsuiviordo-v4";
 const RACINE = new URL("./", self.location).pathname;
 
 const FICHIERS_APPLICATION = [
