@@ -765,10 +765,11 @@ function demarrerAppui(evenement) {
   if (!bouton) return;
   const carte = bouton.closest("[data-maladie]");
   if (!carte || etat.maladies.length < 2) return;
-  glisser = { carte, bouton, x: evenement.clientX, y: evenement.clientY, actif: false };
+  glisser = { carte, bouton, x: evenement.clientX, y: evenement.clientY, actif: false, deltaY: 0, decalage: 0 };
   glisser.minuteur = window.setTimeout(() => {
     if (!glisser) return;
     glisser.actif = true;
+    carte.style.transition = "none";
     carte.classList.add("carte--glissee");
     document.body.classList.add("glisser-en-cours");
     if (navigator.vibrate) {
@@ -780,9 +781,68 @@ function demarrerAppui(evenement) {
 function annulerAppui() {
   if (!glisser) return;
   window.clearTimeout(glisser.minuteur);
-  glisser.carte.classList.remove("carte--glissee");
-  document.body.classList.remove("glisser-en-cours");
+  relacherCarte(glisser.carte, false);
   glisser = null;
+}
+
+/** Remet la carte à sa place (avec une petite transition si demandé). */
+function relacherCarte(carte, animer) {
+  if (!carte) return;
+  carte.classList.remove("carte--glissee");
+  document.body.classList.remove("glisser-en-cours");
+  if (animer) {
+    carte.style.transition = "transform .18s ease";
+    carte.style.transform = "";
+    window.setTimeout(() => {
+      carte.style.transition = "";
+      carte.style.transform = "";
+    }, 220);
+  } else {
+    carte.style.transition = "";
+    carte.style.transform = "";
+  }
+}
+
+function appliquerTranslation() {
+  if (!glisser) return;
+  const translation = glisser.deltaY + glisser.decalage;
+  glisser.carte.style.transform = `translateY(${Math.round(translation)}px)`;
+}
+
+/** Échange la carte glissée avec ses voisines quand elle les dépasse. */
+function replacerSelonPosition() {
+  const carte = glisser.carte;
+  for (let garde = 0; garde < 15; garde += 1) {
+    const rect = carte.getBoundingClientRect();
+    const centre = rect.top + rect.height / 2;
+    let bouge = false;
+
+    const suivante = carte.nextElementSibling;
+    if (suivante) {
+      const r = suivante.getBoundingClientRect();
+      if (centre > r.top + r.height / 2) {
+        const avant = carte.offsetTop;
+        elements.liste.insertBefore(carte, suivante.nextElementSibling);
+        glisser.decalage += avant - carte.offsetTop;
+        appliquerTranslation();
+        bouge = true;
+      }
+    }
+    if (!bouge) {
+      const precedente = carte.previousElementSibling;
+      if (precedente) {
+        const r = precedente.getBoundingClientRect();
+        if (centre < r.top + r.height / 2) {
+          const avant = carte.offsetTop;
+          elements.liste.insertBefore(carte, precedente);
+          glisser.decalage += avant - carte.offsetTop;
+          appliquerTranslation();
+          bouge = true;
+        }
+      }
+    }
+    if (!bouge) break;
+  }
 }
 
 function surDeplacement(evenement) {
@@ -793,21 +853,22 @@ function surDeplacement(evenement) {
     return;
   }
   evenement.preventDefault();
-  const autres = [...elements.liste.querySelectorAll(".carte")].filter((carte) => carte !== glisser.carte);
-  const avant = autres.find((carte) => {
-    const rect = carte.getBoundingClientRect();
-    return evenement.clientY < rect.top + rect.height / 2;
-  });
-  if (avant) elements.liste.insertBefore(glisser.carte, avant);
-  else elements.liste.appendChild(glisser.carte);
+  glisser.deltaY = evenement.clientY - glisser.y;
+  appliquerTranslation();
+  replacerSelonPosition();
+
+  // Défilement automatique près des bords, pour les longues listes.
+  const marge = 80;
+  if (evenement.clientY < marge) window.scrollBy(0, -14);
+  else if (evenement.clientY > window.innerHeight - marge) window.scrollBy(0, 14);
 }
 
 function terminerAppui() {
   if (!glisser) return;
   window.clearTimeout(glisser.minuteur);
   const aGlisse = glisser.actif;
-  glisser.carte.classList.remove("carte--glissee");
-  document.body.classList.remove("glisser-en-cours");
+  const carte = glisser.carte;
+  relacherCarte(carte, aGlisse);
   glisser = null;
   if (!aGlisse) return;
 
